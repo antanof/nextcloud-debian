@@ -1,0 +1,475 @@
+---
+# tasks file for debian-nextcloud
+- name: install commons
+  apt: name={{ item }} state=latest
+  with_items:
+    - apt-transport-https
+    - vim
+    - git
+    - wget
+    - gnupg2
+    - dirmngr
+    - lsb-release
+    - ssl-cert
+    - ca-certificates
+- name: test sources.list backup
+  stat: path=/etc/apt/sources.list.bak
+  register: sources_list_stat
+- name: backup sources.list
+  command: /etc/apt/sources.list /etc/apt/sources.list.bak
+  when: no sources_list_stat.stat.exists
+- name: add repo in sources.list
+  template:
+    src: sources.list.j2
+    dest: /etc/apt/sources.list
+- name: add sury repo key
+  apt_key:
+    url: https://packages.sury.org/php/apt.gpg
+    keyring: /etc/apt/trusted.gpg.d/php.gpg
+- name: add nginx repo key
+  apt_key:
+    url: http://nginx.org/keys/nginx_signing.key
+    keyring: /etc/apt/trusted.gpg.d/nginx.gpg
+- name: add mariadb repo key
+  apt_key:
+    keyserver: keyserver.ubuntu.com
+    id: F1656F24C74CD1D8
+- name: install other commons
+  apt: name={{ item }} state=latest
+  with_items:
+    - software-properties-common
+    - zip
+    - unzip
+    - screen
+    - curl
+    - git
+    - ffmpeg
+    - libfile-fcntllock-perl
+- name: install nginx
+  apt: name=nginx state=present
+- name: enabled nginx
+  service: name=nginx enabled=yes
+- name: mark nginx as hold
+  command: apt-mark hold nginx
+- name: nginx configuration
+  template:
+    src=nginx.conf.j2
+    dest=/etc/nginx/nginx.conf
+  notify: restart nginx
+- name: create folders and apply permissions 1
+  file:
+    path: "/usr/local/tmp/{{ item }}" 
+    state: directory
+    owner: www-data
+    group: root
+    mode: 0755
+    recurse: yes
+  with_items:
+    - ["sessions","apc"]
+- name: create folders and apply permissions 2
+  file:
+    path: "/var/{{ item }}"
+    state: directory
+    owner: www-data
+    group: www-data
+    mode: 0755
+    recurse: yes
+  with_items:
+    - ["nc_data","www/letsencrypt"]
+- name: install php
+  apt: name={{ item }} state=latest update_cache=yes
+  with_items:
+    - ["php7.3-fpm","php7.3-gd","php7.3-mysql","php7.3-curl","php7.3-xml","php7.3-zip","php7.3-intl","php7.3-mbstring","php7.3-json","php7.3-bz2","php7.3-ldap","php-apcu","imagemagick","php-imagick"]
+- name: Adjust time & date
+  timezone:
+    name: Europe/Paris
+- name: configure PHP www.conf
+  replace:
+    path: /etc/php/7.3/fpm/pool.d/www.conf
+    regexp: '{{ item.regexp }}'
+    replace: '{{ item.replace }}'
+    backup: yes
+  with_items:
+    - { regexp: ';env\[HOSTNAME\]', replace: 'env[HOSTNAME]' }
+    - { regexp: ';env\[TMP\]', replace: 'env[TMP]' }
+    - { regexp: ';env\[TMPDIR\]', replace: 'env[TMPDIR]' }
+    - { regexp: ';env\[TEMP\]', replace: 'env[TEMP]' }
+    - { regexp: ';env\[PATH\]', replace: 'env[PATH]' }
+    - { regexp: 'pm.max_children = .*', replace: 'pm.max_children = 240' }
+    - { regexp: 'pm.start_servers = .*', replace: 'pm.start_servers = 20' }
+    - { regexp: 'pm.min_spare_servers = .*', replace: 'pm.min_spare_servers = 10' }
+    - { regexp: 'pm.max_spare_servers = .*', replace: 'pm.max_spare_servers = 20' }
+    - { regexp: ';pm.max_requests = 500', replace: 'pm.max_requests = 500' }
+- name: configure PHP cli
+  replace:
+    path: /etc/php/7.3/cli/php.ini
+    regexp: '{{ item.regexp }}'
+    replace: '{{ item.replace }}'
+    backup: yes
+  with_items:
+    - { regexp: 'output_buffering =.*', replace: 'output_buffering = "Off"' }
+    - { regexp: 'max_execution_time =.*', replace: 'max_execution_time = 1800' }
+    - { regexp: 'max_input_time =.*', replace: 'max_input_time = 3600' }
+    - { regexp: 'post_max_size =.*', replace: 'post_max_size = 10240M' }
+    - { regexp: 'upload_max_filesize =.*', replace: 'upload_max_filesize = 10240M' }
+    - { regexp: 'max_file_uploads =.*', replace: 'max_file_uploads = 100' }
+    - { regexp: ';date.timezone.*', replace: 'date.timezone = Europe\/\Paris/' }
+    - { regexp: ';session.cookie_secure.*', replace: 'session.cookie_secure = True' }
+    - { regexp: ';session.save_path =.*', replace: 'session.save_path = \"N;700;\/usr\/local\/tmp\/sessions\"' }
+- name: enable apc in php cli
+  lineinfile:
+    path: /etc/php/7.3/cli/php.ini
+    insertafter: '; End:'
+    line: 'apc.enable_cli = 1'
+    state: present
+- name: configure PHP fpm
+  replace:
+    path: /etc/php/7.3/fpm/php.ini
+    regexp: '{{ item.regexp }}'
+    replace: '{{ item.replace }}'
+    backup: yes
+  with_items:
+    - { regexp: 'memory_limit = 128M', replace: 'memory_limit = 512M' }
+    - { regexp: 'output_buffering =.*', replace: 'output_buffering = Off' }
+    - { regexp: 'max_execution_time =.*', replace: 'max_execution_time =.*' }
+    - { regexp: 'max_input_time =.*', replace: 'max_input_time =.*' }
+    - { regexp: 'post_max_size =.*', replace: 'post_max_size = 10240M' }
+    - { regexp: 'upload_max_filesize =.*', replace: 'upload_max_filesize = 10240M' }
+    - { regexp: 'max_file_uploads =.*', replace: 'max_file_uploads = 100' }
+    - { regexp: ';date.timezone.*', replace: 'date.timezone = Europe\/\Paris/' }
+    - { regexp: ';session.cookie_secure.*', replace: 'session.cookie_secure = True' }
+    - { regexp: ';opcache.enable=.*', replace: 'opcache.enable=1' }
+    - { regexp: ';opcache.enable_cli=.*', replace: 'opcache.enable_cli=1' }
+    - { regexp: ';opcache.memory_consumption=.*', replace: 'opcache.memory_consumption=128' }
+    - { regexp: ';opcache.interned_strings_buffer=.*', replace: 'opcache.interned_strings_buffer=8' }
+    - { regexp: ';opcache.max_accelerated_files=.*', replace: 'opcache.max_accelerated_files=10000' }
+    - { regexp: ';opcache.revalidate_freq=.*', replace: 'opcache.revalidate_freq=1' }
+    - { regexp: ';opcache.save_comments=.*', replace: 'opcache.save_comments=1' }
+    - { regexp: ';session.save_path =.*', replace: 'session.save_path = \"N;700;\/usr\/local\/tmp\/sessions\"' }
+- name: configure php-fpm.conf
+  replace:
+    path: /etc/php/7.3/fpm/php-fpm.conf
+    regexp: '{{ item.regexp }}'
+    replace: '{{ item.replace }}'
+    backup: yes
+  with_items:
+    - { regexp: ';emergency_restart_threshold =.*', replace: 'emergency_restart_threshold = 10' }
+    - { regexp: ';emergency_restart_interval =.*', replace: 'emergency_restart_interval = 1m' }
+    - { regexp: ';process_control_timeout =.*', replace: 'process_control_timeout = 10s' }
+- name: enable apc in php fpm
+  blockinfile:
+    path: /etc/php/7.3/fpm/php.ini
+    insertafter: '; End:'
+    block: |
+      'apc.enable_cli = 1'
+      'apc.file_update_protection=2'
+      'apc.optimization=0'
+      'apc.shm_size=256M'
+      'apc.include_once_override=0'
+      'apc.shm_segments=1'
+      'apc.ttl=7200'
+      'apc.user_ttl=7200'
+      'apc.gc_ttl=3600'
+      'apc.num_files_hint=1024'
+      'apc.max_file_size=5M'
+      'apc.cache_by_default=1'
+      'apc.use_request_time=1'
+      'apc.slam_defense=0'
+      'apc.mmap_file_mask=/usr/local/tmp/apc/apc.XXXXXX'
+      'apc.stat_ctime=0'
+      'apc.canonicalize=1'
+      'apc.write_lock=1'
+      'apc.report_autofilter=0'
+      'apc.rfc1867=0'
+      'apc.rfc1867_prefix =upload_'
+      'apc.rfc1867_name=APC_UPLOAD_PROGRESS'
+      'apc.rfc1867_freq=0'
+      'apc.rfc1867_ttl=3600'
+      'apc.lazy_classes=0'
+      'apc.lazy_functions=0'
+- name: modify fstab apc
+  mount:
+    path: /usr/local/tmp/apc
+    src: defaults,uid=33,size=300M,noatime,nosuid,nodev,noexec,mode=1777
+    fstype: tmpfs
+    opts: defaults,uid=33,size=300M,noatime,nosuid,nodev,noexec,mode=1777
+    state: present
+- name: modify fstab sessions
+  mount:
+    path: /usr/local/tmp/sessions
+    src: defaults,uid=33,size=300M,noatime,nosuid,nodev,noexec,mode=1777
+    fstype: tmpfs
+    opts: defaults,uid=33,size=300M,noatime,nosuid,nodev,noexec,mode=1777
+    state: present
+#- name: create cron "session clean"
+#  cron:
+#    name: "session clean"
+#    minute: "09"
+#    hour: "39"
+#    job: "/usr/lib/php/sessionclean 2>&1"
+- name: comment php cron
+  replace:
+    path: /etc/cron.d/php
+    regexp: '^09,39.*'
+    replace: '# 09,39 *     * * *     root   [ -x /usr/lib/php/sessionclean ] && if [ ! -d /run/systemd/system ]; then /usr/lib/php/sessionclean; fi'
+    backup: yes
+- name: install mariadb
+  apt:
+    name: mariadb-server
+#    allow_unauthenticated: yes
+    state: present
+- name: install python-mysqldb
+  apt:
+    name: python-mysqldb
+    allow_unauthenticated: yes
+    state: present
+- name: Generate new root password
+  command: openssl rand -hex 7 creates=/root/.my.cnf
+  register: mysql_new_root_pass
+- name: Remove anonymous users
+  mysql_user: name="" state=absent
+  when: mysql_new_root_pass.changed
+- name: Remove test database
+  mysql_db: name=test state=absent
+  when: mysql_new_root_pass.changed
+- name: Output new root password
+  debug: 
+   msg: "New root password is {{mysql_new_root_pass.stdout}}"
+  when: mysql_new_root_pass.changed
+- name: Update root password
+  mysql_user: name=root host={{item}} password={{mysql_new_root_pass.stdout}}
+  with_items:
+   - "{{ domain_name }}"
+   - 127.0.0.1
+   - ::1
+   - localhost
+  when: mysql_new_root_pass.changed
+- name: Create my.cnf
+  template: src=mycnf.j2 dest=/root/.my.cnf
+  when: mysql_new_root_pass.changed
+- name: mariadb configuration
+  template:
+    src: my.cnf.j2
+    dest: /etc/mysql/my.cnf
+    backup: yes
+  notify: restart mysql
+- name: create nextcloud database
+  mysql_db: name="{{ database_name }}" state=present encoding=utf8mb4 collation=utf8mb4_general_ci
+- name: create nextcloud database user
+  mysql_user: name="{{ database_user }}" password="{{ database_pass }}" priv='*.*:ALL,GRANT' host=localhost state=present
+- name: install redis
+  apt: name={{ item }} state=latest
+  with_items:
+    - redis-server
+    - php-redis
+- name: configure redis
+  replace:
+    path: /etc/redis/redis.conf
+    regexp: '{{ item.regexp }}'
+    replace: '{{ item.replace }}'
+    backup: yes
+  with_items:
+    - { regexp: 'port 6379', replace: 'port 0' }
+    - { regexp: '\#\ unixsocket', replace: 'unixsocket' }
+    - { regexp: 'unixsocketperm 700', replace: 'unixsocketperm 770' }
+    - { regexp: '# maxclients 10000', replace: 'maxclients 512' }
+- name: configure overcommit memory
+  lineinfile:
+    path: /etc/sysctl.conf
+    line: 'vm.overcommit_memory = 1'
+    state: present
+- name: Added redis to www-data group 
+  user:
+    name: redis
+    groups: www-data
+    append: yes
+  notify:
+    - Restart server
+    - Wait for server to restart
+- name: move nginx default.conf
+  stat: path=/etc/nginx/conf.d/default.conf
+  register: default_stat
+- name: move nginx default.conf
+  command: mv /etc/nginx/conf.d/default.conf /etc/nginx/conf.d/default.conf.bak
+  when: default_stat.stat.exists
+- name: nextcloud configuration
+  template:
+    src: nextcloud.conf.j2
+    dest: /etc/nginx/conf.d/nextcloud.conf
+- name: letsencrypt configuration
+  template:
+    src: letsencrypt.conf.j2
+    dest: /etc/nginx/conf.d/letsencrypt.conf
+- name: ssl configuration
+  template:
+    src: ssl.conf.j2
+    dest: /etc/nginx/ssl.conf
+- name: proxy configuration
+  template:
+    src: proxy.conf.j2
+    dest: /etc/nginx/proxy.conf
+- name: header configuration
+  template:
+    src: header.conf.j2
+    dest: /etc/nginx/header.conf
+- name: optimization configuration
+  template:
+    src: optimization.conf.j2
+    dest: /etc/nginx/optimization.conf
+- name: php optimization configuration
+  template:
+    src: php_optimization.conf.j2
+    dest: /etc/nginx/php_optimization.conf
+- name: test dhparam.pem
+  stat: path=/etc/ssl/certs/dhparam.pem
+  register: dhparam_stat
+- name: create dhparam.pem
+  command: openssl dhparam -out /etc/ssl/certs/dhparam.pem 4096
+  when: not dhparam_stat.stat.exists
+- name: configure nginx for ssl
+  replace:
+    path: /etc/nginx/nginx.conf
+    regexp: '\#\include'
+    replace: 'include'
+  notify: restart nginx
+#- name: get nextcloud checksum
+#  uri: url=https://download.nextcloud.com/server/releases/latest.tar.bz2.sha256 return_content=true
+#  register: wp_checksum
+- name: download nextcloud
+  get_url:
+    url: https://download.nextcloud.com/server/releases/latest.tar.bz2
+    dest: /root
+- name: fix permission /var/www
+  file:
+    path: /var/www
+    owner: www-data
+    group: www-data
+    recurse: yes
+- name: extract nextcloud archive
+  unarchive:
+    src: /root/latest.tar.bz2
+    dest: /var/www
+    remote_src: yes
+  tags: extract_nextcloud
+- name: install certbot letsencrypt
+  apt: name=certbot state=present update_cache=yes default_release=stretch-backports
+  tags: certbot_install
+- name: test if certificats exist
+  stat: path=/etc/letsencrypt/live/"{{ domain_name }}"/cert.pem
+  register: letsencrypt_stat
+- name: create letsencrypt certificats
+  command: letsencrypt certonly -a webroot --webroot-path=/var/www/letsencrypt --rsa-key-size 4096 --agree-tos -d "{{ domain_name }}" -m  postmaster@"{{ domain_name }}"
+  when: not letsencrypt_stat.stat.exists
+  ignore_errors: yes
+  run_once: true
+  tags: certbot
+- name: execute permissions script
+  script: /root/permissions.sh
+  become: yes
+  tags: permissions
+- name: modify ssl.conf 1
+  replace:
+    path: /etc/nginx/ssl.conf
+    regexp: 'ssl-cert-snakeoil'
+#  notify: restart nginx
+- name: modify ssl.conf 2
+  replace:
+    path: /etc/nginx/ssl.conf
+    regexp: '#ssl'
+    replace: 'ssl'
+  notify: restart nginx
+- name: INSTALL NEXTCLOUD
+  command: su - www-data -s /bin/bash -c 'php /var/www/nextcloud/occ maintenance:install --database "mysql" --database-name "{{ database_name }}" --database-user "{{ database_user }}" --database-pass "{{ database_pass}}" --admin-user "{{ nextcloud_admin }}" --admin-pass "{{ nextcloudadmin_password }}" --data-dir "/var/nc_data"'
+  run_once: true
+  ignore_errors: yes
+- name: nextcloud ad hoc commands
+  command: "{{ item }}"
+  with_items:
+    - su - www-data -s /bin/bash -c 'php /var/www/nextcloud/occ config:system:set trusted_domains 1 --value="{{ domain_name }}"'
+    - su - www-data -s /bin/bash -c 'php /var/www/nextcloud/occ config:system:set overwrite.cli.url --value=https://"{{ domain_name }}"'
+  run_once: true
+  ignore_errors: yes
+- name: test backup nextcloud config
+  stat: path=/var/www/nextcloud/config/config.php.bak
+  register: nc_config_stat
+- name: backup nextcloud config
+  command: cp /var/www/nextcloud/config/config.php /var/www/nextcloud/config/config.php.bak
+  when: no nc_config_stat.stat.exists
+- name: expand nextcloud config
+  replace:
+    path: /var/www/nextcloud/config/config.php
+    regexp: ');'
+    backup: yes
+- name: add conf in nextcloud config
+  blockinfile:
+    path: /var/www/nextcloud/config/config.php
+    block: |
+      'activity_expire_days' => 14,
+      'auth.bruteforce.protection.enabled' => true,
+      'blacklisted_files' => 
+      array (
+      0 => '.htaccess',
+      1 => 'Thumbs.db',
+      2 => 'thumbs.db',
+      ),
+      'cron_log' => true,
+      'enable_previews' => true,
+      'enabledPreviewProviders' => 
+      array (
+      0 => 'OC\\Preview\\PNG',
+      1 => 'OC\\Preview\\JPEG',
+      2 => 'OC\\Preview\\GIF',
+      3 => 'OC\\Preview\\BMP',
+      4 => 'OC\\Preview\\XBitmap',
+      5 => 'OC\\Preview\\Movie',
+      6 => 'OC\\Preview\\PDF',
+      7 => 'OC\\Preview\\MP3',
+      8 => 'OC\\Preview\\TXT',
+      9 => 'OC\\Preview\\MarkDown',
+      ),
+      'filesystem_check_changes' => 0,
+      'filelocking.enabled' => 'true',
+      'htaccess.RewriteBase' => '/',
+      'integrity.check.disabled' => false,
+      'knowledgebaseenabled' => false,
+      'logfile' => '/var/nc_data/nextcloud.log',
+      'loglevel' => 2,
+      'logtimezone' => 'Europe/Paris',
+      'log_rotate_size' => 104857600,
+      'maintenance' => false,
+      'memcache.local' => '\\OC\\Memcache\\APCu',
+      'memcache.locking' => '\\OC\\Memcache\\Redis',
+      'overwriteprotocol' => 'https',
+      'preview_max_x' => 1024,
+      'preview_max_y' => 768,
+      'preview_max_scale_factor' => 1,
+      'redis' => 
+      array (
+      'host' => '/var/run/redis/redis.sock',
+      'port' => 0,
+      'timeout' => 0.0,
+      ),
+      'quota_include_external_storage' => false,
+      'share_folder' => '/Shares',
+      'skeletondirectory' => '',
+      'theme' => '',
+      'trashbin_retention_obligation' => 'auto, 7',
+      'updater.release.channel' => 'stable',
+      );
+- name: adjust .user.ini
+  replace:
+    path: /var/www/nextcloud/.user.ini
+    regexp: '{{ item.regexp }}'
+    replace: '{{ item.replace }}'
+    backup: yes
+  with_items:
+    - { regexp: 'upload_max_filesize=.*', replace: 'upload_max_filesize=10240M' }
+    - { regexp: 'post_max_size=.*', replace: 'post_max_size=10240M' }
+    - { regexp: 'output_buffering=.*', replace: 'output_buffering="Off"' }
+- name: restart all services
+  service: name="{{ item }}" state=restarted
+  with_items:
+    - php7.3-fpm
+    - redis-server
+    - nginx
+...

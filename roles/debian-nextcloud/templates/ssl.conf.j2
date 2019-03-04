@@ -1,0 +1,16 @@
+ssl_certificate /etc/ssl/certs/ssl-cert-snakeoil.pem;
+ssl_certificate_key /etc/ssl/private/ssl-cert-snakeoil.key;
+ssl_trusted_certificate /etc/ssl/certs/ssl-cert-snakeoil.pem;
+#ssl_certificate /etc/letsencrypt/live/{{ ansible_hostname }}/fullchain.pem;
+#ssl_certificate_key /etc/letsencrypt/live/{{ ansible_hostname }}/privkey.pem;
+#ssl_trusted_certificate /etc/letsencrypt/live/{{ ansible_hostname }}/chain.pem;
+ssl_dhparam /etc/ssl/certs/dhparam.pem;
+ssl_session_timeout 1d;
+ssl_session_cache shared:SSL:50m;
+ssl_session_tickets off;
+ssl_protocols TLSv1.2;
+ssl_ciphers 'ECDHE-RSA-AES256-GCM-SHA512:DHE-RSA-AES256-GCM-SHA512:ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-SHA384';
+ssl_ecdh_curve secp521r1:secp384r1:prime256v1;
+ssl_prefer_server_ciphers on;
+ssl_stapling on;
+ssl_stapling_verify on;

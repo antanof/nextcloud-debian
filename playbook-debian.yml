@@ -1,0 +1,14 @@
+---
+- hosts: debian
+  user: debian
+  become: yes
+  vars:
+    - domain_name: "domain.tld"
+    - nextcloud_admin: "user"
+    - nextcloudadmin_password: "s3cr3T4U"
+    - database_name: "nextcloud"
+    - database_user: "nextcloud"
+    - database_pass: "nextcloud"
+  roles:
+    - role: debian-nextcloud
+
