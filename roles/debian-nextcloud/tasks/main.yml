@@ -17,7 +17,7 @@
   register: sources_list_stat
 - name: backup sources.list
   command: /etc/apt/sources.list /etc/apt/sources.list.bak
-  when: no sources_list_stat.stat.exists
+  when: not sources_list_stat.stat.exists
 - name: add repo in sources.list
   template:
     src: sources.list.j2
