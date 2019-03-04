@@ -16,7 +16,7 @@
   stat: path=/etc/apt/sources.list.bak
   register: sources_list_stat
 - name: backup sources.list
-  command: /etc/apt/sources.list /etc/apt/sources.list.bak
+  command: cp /etc/apt/sources.list /etc/apt/sources.list.bak
   when: not sources_list_stat.stat.exists
 - name: add repo in sources.list
   template:
