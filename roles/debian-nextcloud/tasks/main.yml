@@ -394,7 +394,7 @@
   register: nc_config_stat
 - name: backup nextcloud config
   command: cp /var/www/nextcloud/config/config.php /var/www/nextcloud/config/config.php.bak
-  when: no nc_config_stat.stat.exists
+  when: not nc_config_stat.stat.exists
 - name: expand nextcloud config
   replace:
     path: /var/www/nextcloud/config/config.php
