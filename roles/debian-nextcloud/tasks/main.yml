@@ -55,8 +55,8 @@
   include: redis.yml
 - name: nginx configuration
   include: nginx-conf.yml
-- name: nextcloud installation
-  include: nc-install.yml
+- name: nextcloud binaries download
+  include: nc-download.yml
 - name: installation certbot
   include: certbot.yml
 - name: INSTALL NEXTCLOUD
