@@ -53,52 +53,8 @@
   include: mariadb.yml
 - name: redis installation
   include: redis.yml
-- name: move nginx default.conf
-  stat: path=/etc/nginx/conf.d/default.conf
-  register: default_stat
-- name: move nginx default.conf
-  command: mv /etc/nginx/conf.d/default.conf /etc/nginx/conf.d/default.conf.bak
-  when: default_stat.stat.exists
-- name: nextcloud configuration
-  template:
-    src: nextcloud.conf.j2
-    dest: /etc/nginx/conf.d/nextcloud.conf
-- name: letsencrypt configuration
-  template:
-    src: letsencrypt.conf.j2
-    dest: /etc/nginx/conf.d/letsencrypt.conf
-- name: ssl configuration
-  template:
-    src: ssl.conf.j2
-    dest: /etc/nginx/ssl.conf
-- name: proxy configuration
-  template:
-    src: proxy.conf.j2
-    dest: /etc/nginx/proxy.conf
-- name: header configuration
-  template:
-    src: header.conf.j2
-    dest: /etc/nginx/header.conf
-- name: optimization configuration
-  template:
-    src: optimization.conf.j2
-    dest: /etc/nginx/optimization.conf
-- name: php optimization configuration
-  template:
-    src: php_optimization.conf.j2
-    dest: /etc/nginx/php_optimization.conf
-- name: test dhparam.pem
-  stat: path=/etc/ssl/certs/dhparam.pem
-  register: dhparam_stat
-- name: create dhparam.pem
-  command: openssl dhparam -out /etc/ssl/certs/dhparam.pem 4096
-  when: not dhparam_stat.stat.exists
-- name: configure nginx for ssl
-  replace:
-    path: /etc/nginx/nginx.conf
-    regexp: '\#\include'
-    replace: 'include'
-  notify: restart nginx
+- name: nginx configuration
+  include: nginx-conf.yml
 #- name: get nextcloud checksum
 #  uri: url=https://download.nextcloud.com/server/releases/latest.tar.bz2.sha256 return_content=true
 #  register: wp_checksum
