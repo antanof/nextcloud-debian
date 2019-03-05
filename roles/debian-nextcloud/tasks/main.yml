@@ -190,14 +190,14 @@
 - name: modify fstab apc
   mount:
     path: /usr/local/tmp/apc
-    src: defaults,uid=33,size=300M,noatime,nosuid,nodev,noexec,mode=1777
+    src: tmpfs
     fstype: tmpfs
     opts: defaults,uid=33,size=300M,noatime,nosuid,nodev,noexec,mode=1777
     state: present
 - name: modify fstab sessions
   mount:
     path: /usr/local/tmp/sessions
-    src: defaults,uid=33,size=300M,noatime,nosuid,nodev,noexec,mode=1777
+    src: tmpfs
     fstype: tmpfs
     opts: defaults,uid=33,size=300M,noatime,nosuid,nodev,noexec,mode=1777
     state: present
