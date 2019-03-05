@@ -1,0 +1,31 @@
+---
+- name: install redis
+  apt: name={{ item }} state=latest
+  with_items:
+    - redis-server
+    - php-redis
+- name: configure redis
+  replace:
+    path: /etc/redis/redis.conf
+    regexp: '{{ item.regexp }}'
+    replace: '{{ item.replace }}'
+    backup: yes
+  with_items:
+    - { regexp: 'port 6379', replace: 'port 0' }
+    - { regexp: '\#\ unixsocket', replace: 'unixsocket' }
+    - { regexp: 'unixsocketperm 700', replace: 'unixsocketperm 770' }
+    - { regexp: '# maxclients 10000', replace: 'maxclients 512' }
+- name: configure overcommit memory
+  lineinfile:
+    path: /etc/sysctl.conf
+    line: 'vm.overcommit_memory = 1'
+    state: present
+- name: Added redis to www-data group 
+  user:
+    name: redis
+    groups: www-data
+    append: yes
+  notify:
+    - Restart server
+    - Wait for server to restart
+...
