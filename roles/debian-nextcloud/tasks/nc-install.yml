@@ -1,0 +1,96 @@
+---
+- name: INSTALL NEXTCLOUD
+  command: su - www-data -s /bin/bash -c 'php /var/www/nextcloud/occ maintenance:install --database "mysql" --database-name "{{ database_name }}" --database-user "{{ database_user }}" --database-pass "{{ database_pass}}" --admin-user "{{ nextcloud_admin }}" --admin-pass "{{ nextcloudadmin_password }}" --data-dir "/var/nc_data"'
+  run_once: true
+  ignore_errors: yes
+- name: nextcloud ad hoc commands
+  command: "{{ item }}"
+  with_items:
+    - su - www-data -s /bin/bash -c 'php /var/www/nextcloud/occ config:system:set trusted_domains 1 --value="{{ domain_name }}"'
+    - su - www-data -s /bin/bash -c 'php /var/www/nextcloud/occ config:system:set overwrite.cli.url --value=https://"{{ domain_name }}"'
+  run_once: true
+  ignore_errors: yes
+- name: test backup nextcloud config
+  stat: path=/var/www/nextcloud/config/config.php.bak
+  register: nc_config_stat
+- name: backup nextcloud config
+  command: cp /var/www/nextcloud/config/config.php /var/www/nextcloud/config/config.php.bak
+  when: not nc_config_stat.stat.exists
+- name: expand nextcloud config
+  replace:
+    path: /var/www/nextcloud/config/config.php
+    regexp: ');'
+    backup: yes
+- name: add conf in nextcloud config
+  blockinfile:
+    path: /var/www/nextcloud/config/config.php
+    block: |
+      'activity_expire_days' => 14,
+      'auth.bruteforce.protection.enabled' => true,
+      'blacklisted_files' => 
+      array (
+      0 => '.htaccess',
+      1 => 'Thumbs.db',
+      2 => 'thumbs.db',
+      ),
+      'cron_log' => true,
+      'enable_previews' => true,
+      'enabledPreviewProviders' => 
+      array (
+      0 => 'OC\\Preview\\PNG',
+      1 => 'OC\\Preview\\JPEG',
+      2 => 'OC\\Preview\\GIF',
+      3 => 'OC\\Preview\\BMP',
+      4 => 'OC\\Preview\\XBitmap',
+      5 => 'OC\\Preview\\Movie',
+      6 => 'OC\\Preview\\PDF',
+      7 => 'OC\\Preview\\MP3',
+      8 => 'OC\\Preview\\TXT',
+      9 => 'OC\\Preview\\MarkDown',
+      ),
+      'filesystem_check_changes' => 0,
+      'filelocking.enabled' => 'true',
+      'htaccess.RewriteBase' => '/',
+      'integrity.check.disabled' => false,
+      'knowledgebaseenabled' => false,
+      'logfile' => '/var/nc_data/nextcloud.log',
+      'loglevel' => 2,
+      'logtimezone' => 'Europe/Paris',
+      'log_rotate_size' => 104857600,
+      'maintenance' => false,
+      'memcache.local' => '\\OC\\Memcache\\APCu',
+      'memcache.locking' => '\\OC\\Memcache\\Redis',
+      'overwriteprotocol' => 'https',
+      'preview_max_x' => 1024,
+      'preview_max_y' => 768,
+      'preview_max_scale_factor' => 1,
+      'redis' => 
+      array (
+      'host' => '/var/run/redis/redis.sock',
+      'port' => 0,
+      'timeout' => 0.0,
+      ),
+      'quota_include_external_storage' => false,
+      'share_folder' => '/Shares',
+      'skeletondirectory' => '',
+      'theme' => '',
+      'trashbin_retention_obligation' => 'auto, 7',
+      'updater.release.channel' => 'stable',
+      );
+- name: adjust .user.ini
+  replace:
+    path: /var/www/nextcloud/.user.ini
+    regexp: '{{ item.regexp }}'
+    replace: '{{ item.replace }}'
+    backup: yes
+  with_items:
+    - { regexp: 'upload_max_filesize=.*', replace: 'upload_max_filesize=10240M' }
+    - { regexp: 'post_max_size=.*', replace: 'post_max_size=10240M' }
+    - { regexp: 'output_buffering=.*', replace: 'output_buffering="Off"' }
+- name: restart all services
+  service: name="{{ item }}" state=restarted
+  with_items:
+    - php7.3-fpm
+    - redis-server
+    - nginx
+...
