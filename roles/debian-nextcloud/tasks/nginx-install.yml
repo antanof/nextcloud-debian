@@ -1,0 +1,33 @@
+---
+- name: install nginx
+  apt: name=nginx state=present
+- name: enabled nginx
+  service: name=nginx enabled=yes
+- name: mark nginx as hold
+  command: apt-mark hold nginx
+- name: nginx configuration
+  template:
+    src=nginx.conf.j2
+    dest=/etc/nginx/nginx.conf
+  notify: restart nginx
+- name: create folders and apply permissions 1
+  file:
+    path: "/usr/local/tmp/{{ item }}" 
+    state: directory
+    owner: www-data
+    group: root
+    mode: 0755
+    recurse: yes
+  with_items:
+    - ["sessions","apc"]
+- name: create folders and apply permissions 2
+  file:
+    path: "/var/{{ item }}"
+    state: directory
+    owner: www-data
+    group: www-data
+    mode: 0755
+    recurse: yes
+  with_items:
+    - ["nc_data","www/letsencrypt"]
+...
