@@ -1,0 +1,46 @@
+---
+- name: install mariadb
+  apt:
+    name: mariadb-server
+#    allow_unauthenticated: yes
+    state: present
+- name: install python-mysqldb
+  apt:
+    name: python-mysqldb
+    allow_unauthenticated: yes
+    state: present
+- name: Generate new root password
+  command: openssl rand -hex 7 creates=/root/.my.cnf
+  register: mysql_new_root_pass
+- name: Remove anonymous users
+  mysql_user: name="" state=absent
+  when: mysql_new_root_pass.changed
+- name: Remove test database
+  mysql_db: name=test state=absent
+  when: mysql_new_root_pass.changed
+- name: Output new root password
+  debug: 
+   msg: "New root password is {{mysql_new_root_pass.stdout}}"
+  when: mysql_new_root_pass.changed
+- name: Update root password
+  mysql_user: name=root host={{item}} password={{mysql_new_root_pass.stdout}}
+  with_items:
+   - "{{ domain_name }}"
+   - 127.0.0.1
+   - ::1
+   - localhost
+  when: mysql_new_root_pass.changed
+- name: Create my.cnf
+  template: src=mycnf.j2 dest=/root/.my.cnf
+  when: mysql_new_root_pass.changed
+- name: mariadb configuration
+  template:
+    src: my.cnf.j2
+    dest: /etc/mysql/my.cnf
+    backup: yes
+  notify: restart mysql
+- name: create nextcloud database
+  mysql_db: name="{{ database_name }}" state=present encoding=utf8mb4 collation=utf8mb4_general_ci
+- name: create nextcloud database user
+  mysql_user: name="{{ database_user }}" password="{{ database_pass }}" priv='*.*:ALL,GRANT' host=localhost state=present
+...
