@@ -1,0 +1,28 @@
+---
+- name: install certbot letsencrypt
+  apt: name=certbot state=present update_cache=yes default_release=stretch-backports
+  tags: certbot_install
+- name: test if certificats exist
+  stat: path=/etc/letsencrypt/live/"{{ domain_name }}"/cert.pem
+  register: letsencrypt_stat
+- name: create letsencrypt certificats
+  command: letsencrypt certonly -a webroot --webroot-path=/var/www/letsencrypt --rsa-key-size 4096 --agree-tos -d "{{ domain_name }}" -m  postmaster@"{{ domain_name }}"
+  when: not letsencrypt_stat.stat.exists
+  ignore_errors: yes
+  run_once: true
+  tags: certbot
+- name: execute permissions script
+  script: /root/permissions.sh
+  become: yes
+  tags: permissions
+- name: modify ssl.conf 1
+  replace:
+    path: /etc/nginx/ssl.conf
+    regexp: 'ssl-cert-snakeoil'
+- name: modify ssl.conf 2
+  replace:
+    path: /etc/nginx/ssl.conf
+    regexp: '#ssl'
+    replace: 'ssl'
+  notify: restart nginx
+...
