@@ -55,25 +55,8 @@
   include: redis.yml
 - name: nginx configuration
   include: nginx-conf.yml
-#- name: get nextcloud checksum
-#  uri: url=https://download.nextcloud.com/server/releases/latest.tar.bz2.sha256 return_content=true
-#  register: wp_checksum
-- name: download nextcloud
-  get_url:
-    url: https://download.nextcloud.com/server/releases/latest.tar.bz2
-    dest: /root
-- name: fix permission /var/www
-  file:
-    path: /var/www
-    owner: www-data
-    group: www-data
-    recurse: yes
-- name: extract nextcloud archive
-  unarchive:
-    src: /root/latest.tar.bz2
-    dest: /var/www
-    remote_src: yes
-  tags: extract_nextcloud
+- name: nextcloud installation
+  include: nc-install.yml
 - name: install certbot letsencrypt
   apt: name=certbot state=present update_cache=yes default_release=stretch-backports
   tags: certbot_install
